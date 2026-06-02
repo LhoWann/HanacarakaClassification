@@ -1,4 +1,4 @@
-# Klasifikasi Aksara Jawa (Hanacaraka) dengan CNN PyTorch
+﻿# Klasifikasi Aksara Jawa (Hanacaraka) dengan CNN PyTorch
 
 Proyek tugas mata kuliah **Pembelajaran Mesin Semester 4** — membangun Convolutional Neural Network (CNN) untuk mengklasifikasikan 20 karakter aksara Jawa (*Hanacaraka*) dari gambar tulisan tangan.
 
@@ -309,23 +309,23 @@ Output: (B, 20)
 
 ### Rumus Dasar CNN
 
-```
-Output conv  : O = floor((I - K + 2P) / S) + 1
-Output pool  : O = floor((I - K) / S) + 1
-Params conv  : K × K × C_in × C_out        (bias=False)
-Params BN    : 2 × C                        (γ + β, learnable)
-Params Linear: C_in × C_out + C_out         (dengan bias)
-```
+$$O_{\text{conv}} = \left\lfloor\frac{I - K + 2P}{S}\right\rfloor + 1 \qquad O_{\text{pool}} = \left\lfloor\frac{I - K}{S}\right\rfloor + 1$$
+
+| Komponen | Rumus Parameter |
+|----------|----------------|
+| Conv2d (`bias=False`) | $K \times K \times C_{in} \times C_{out}$ |
+| BatchNorm | $2 \times C$ (gamma + beta) |
+| Linear | $C_{in} \times C_{out} + C_{out}$ |
 
 ### Keputusan Desain
 
 | Komponen | Pilihan | Alasan |
 |----------|---------|--------|
-| `bias=False` di Conv | Hemat parameter | BatchNorm sudah punya shift parameter (β) yang setara dengan bias |
-| `ReLU(inplace=False)` | Non-inplace | inplace modifikasi tensor in-place → `RuntimeError` saat Grad-CAM backward |
-| `AdaptiveAvgPool` | Pooling ke 1×1 | Robust terhadap perubahan input size; smoothing global sebelum classifier |
-| Kaiming init (Conv) | `fan_out` + `relu` | Sesuai dengan karakteristik ReLU yang mengikutinya |
-| Xavier init (Linear) | Default | Output adalah logit, bukan feature — Xavier lebih stabil dari Kaiming |
+| `bias=False` di Conv | Hemat parameter | BatchNorm sudah punya shift (β) yang setara bias |
+| `ReLU(inplace=False)` | Non-inplace | `inplace=True` merusak tensor yang di-hook Grad-CAM → `RuntimeError` |
+| `AdaptiveAvgPool` | Output 1×1 | Robust terhadap perubahan input size |
+| Weight init Conv | Kaiming `fan_out` | Sesuai karakteristik aktivasi ReLU |
+| Weight init Linear | Xavier | Output logit lebih stabil dengan Xavier |
 
 ---
 
@@ -335,30 +335,28 @@ Params Linear: C_in × C_out + C_out         (dengan bias)
 
 Dieksekusi di dalam `AksaraJawaDataset.__getitem__` menggunakan PIL, *sebelum* transform:
 
-```
-1. Konversi ke grayscale (PIL mode 'L')
-   → Warna tidak informatif untuk handwriting; mengurangi channel 3x
+**1. Konversi ke Grayscale** — `img.convert("L")`
 
-2. AutoContrast (cutoff=2%)
-   → Stretch dynamic range ke [0, 255]
-   → Tanpa ini, stroke tipis dan light-gray akan hilang setelah resize
+Warna tidak informatif untuk handwriting; mengurangi input dari 3 channel menjadi 1 channel.
 
-3. Invert
-   → Background hitam (0), stroke putih (255)
-   → "Fitur positif" (stroke) di-amplify oleh ReLU, bukan ditekan
-   → Lebih natural untuk CNN: fitur = nilai tinggi
+**2. AutoContrast** — `ImageOps.autocontrast(img, cutoff=2)`
 
-4. Square padding (background = hitam)
-   → Preserve aspect ratio sebelum resize
-   → Tanpa ini, karakter landscape akan ter-squish dan stroke terdistorsi
-```
+Stretch dynamic range ke [0, 255]. Tanpa ini, stroke tipis dan light-gray akan hilang setelah resize.
+
+**3. Invert** — `ImageOps.invert(img)`
+
+Background hitam (0), stroke putih (255). "Fitur positif" (stroke) di-amplify oleh ReLU, bukan ditekan.
+
+**4. Square Padding** — `ImageOps.pad(img, ...)`
+
+Preserve aspect ratio sebelum resize. Tanpa ini, karakter landscape akan ter-squish dan stroke terdistorsi.
 
 ### Normalisasi
 
-```
-mean = (0.10,)   # background dominan (~90% piksel bernilai 0) → mean rendah
-std  = (0.25,)   # std ≈ sqrt(p × (1-p)) ≈ sqrt(0.10 × 0.90) ≈ 0.30, digunakan 0.25
-                 # range normalisasi: [(-0.10)/0.25, (0.90)/0.25] = [-0.40, 3.60]
+```python
+norm_mean = (0.10,)   # background dominan (~90% piksel = 0) → mean rendah
+norm_std  = (0.25,)   # std diestimasi: sqrt(0.10 * 0.90) ≈ 0.30, dibulatkan 0.25
+                      # range: [(-0.10)/0.25, (0.90)/0.25] = [-0.40, 3.60]
 ```
 
 ### Augmentasi Training
@@ -385,18 +383,15 @@ std  = (0.25,)   # std ≈ sqrt(p × (1-p)) ≈ sqrt(0.10 × 0.90) ≈ 0.30, dig
 
 **Label Smoothing (ε=0.05):**
 
-Mengubah label one-hot `[1, 0, ..., 0]` menjadi `[0.9525, 0.0025, ..., 0.0025]`
-
-→ Mencegah model terlalu *overconfident* pada kelas mudah dan meningkatkan generalisasi pada kelas sulit (`ha`, `la`)
+Mengubah label one-hot `[1, 0, ..., 0]` menjadi `[0.9525, 0.0025, ..., 0.0025]`. Mencegah model terlalu *overconfident* pada kelas mudah dan meningkatkan generalisasi pada kelas sulit (`ha`, `la`).
 
 ### Learning Rate Schedule
 
-```
-Linear Warmup (2 epoch) → Cosine Annealing (sisa epoch)
+**Linear Warmup (2 epoch) lalu Cosine Annealing (sisa epoch):**
 
-lr(step) = step / warmup_steps                         (fase warmup)
-lr(step) = 0.5 × (1 + cos(π × progress))              (fase cosine)
-```
+$$\text{lr}(t) = \frac{t}{t_{\text{warmup}}} \qquad (t < t_{\text{warmup}})$$
+
+$$\text{lr}(t) = \frac{1}{2}\left(1 + \cos\!\left(\pi \cdot \frac{t - t_{\text{warmup}}}{T - t_{\text{warmup}}}\right)\right) \qquad (t \geq t_{\text{warmup}})$$
 
 - **Warmup**: mencegah loss spike di iterasi awal ketika BatchNorm belum stabil
 - **Cosine Annealing**: lebih baik dari step-decay untuk CNN dengan dataset kecil
@@ -468,11 +463,9 @@ Grad-CAM (*Gradient-weighted Class Activation Mapping*) menunjukkan **bagian man
 
 **Rumus matematis:**
 
-```
-α_k^c = (1/Z) Σᵢⱼ (∂y^c / ∂A_ij^k)     ← global average pooling of gradients
+$$\alpha_k^c = \frac{1}{Z} \sum_{i,j} \frac{\partial y^c}{\partial A_{ij}^k}$$
 
-L^c = ReLU( Σₖ α_k^c · A^k )            ← weighted combination of feature maps
-```
+$$L^c = \text{ReLU}\!\left(\sum_k \alpha_k^c \cdot A^k\right)$$
 
 Di mana:
 - `A^k` = feature map ke-k pada layer target
@@ -552,6 +545,3 @@ cfg.learning_rate = 1e-3   # Override sebelum training
 - **Reproducibility**: seed 42 di-set untuk `torch`, `numpy`, dan `sklearn.train_test_split` — hasil training dapat direproduksi selama hardware sama
 - **Dataset lazy loading**: gambar dibuka satu per satu saat diakses (`__getitem__`), bukan di-load semua ke RAM saat inisialisasi — aman untuk dataset besar
 - **Deduplication berbasis MD5**: script download menggunakan hash MD5 untuk menghapus gambar duplikat antar sumber, mencegah data leakage train/test
-#   H a n a c a r a k a C l a s s i f i c a t i o n  
- #   H a n a c a r a k a C l a s s i f i c a t i o n  
- 
