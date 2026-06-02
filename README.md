@@ -553,4 +553,5 @@ cfg.learning_rate = 1e-3   # Override sebelum training
 - **Dataset lazy loading**: gambar dibuka satu per satu saat diakses (`__getitem__`), bukan di-load semua ke RAM saat inisialisasi — aman untuk dataset besar
 - **Deduplication berbasis MD5**: script download menggunakan hash MD5 untuk menghapus gambar duplikat antar sumber, mencegah data leakage train/test
 #   H a n a c a r a k a C l a s s i f i c a t i o n  
+ #   H a n a c a r a k a C l a s s i f i c a t i o n  
  
