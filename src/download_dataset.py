@@ -13,13 +13,7 @@ from tqdm.auto import tqdm
 from PIL import Image
 from sklearn.model_selection import train_test_split
 
-# CONFIG
-CLASSES = [
-    "ha", "na", "ca", "ra", "ka",
-    "da", "ta", "sa", "wa", "la",
-    "pa", "dha", "ja", "ya", "nya",
-    "ma", "ga", "ba", "tha", "nga",
-]
+from config import CLASSES
 
 SPLIT_RATIO = {"train": 0.70, "val": 0.15, "test": 0.15}
 IMG_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
@@ -34,7 +28,6 @@ GITHUB_REPO_ZIP = (
 
 ROBOFLOW_API_KEY = os.getenv("ROBOFLOW_API_KEY", "")
 
-# LOGGING
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -43,7 +36,6 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-# HELPERS
 def file_md5(path: Path, chunk=8192) -> str:
     h = hashlib.md5()
     with open(path, "rb") as f:
@@ -94,7 +86,6 @@ def normalize_class_name(name: str) -> str:
     return aliases.get(name, name)
 
 
-# SOURCE 1: GitHub vzrenggamani
 def download_github_vzrenggamani(raw_dir: Path) -> Path:
     dest_zip = raw_dir / "github_vzrenggamani.zip"
     dest_dir = raw_dir / "github_vzrenggamani"
@@ -117,13 +108,7 @@ def download_github_vzrenggamani(raw_dir: Path) -> Path:
     return dest_dir
 
 
-# SOURCE 2: Roboflow fawwaz — Object Detection → Crop per class
 def download_roboflow_fawwaz(raw_dir: Path, api_key: str) -> Path:
-    """
-    Dataset fawwaz adalah object-detection project.
-    Download format yolov8, lalu crop setiap bounding box
-    menjadi gambar klasifikasi individual per kelas.
-    """
     dest_dir  = raw_dir / "roboflow_fawwaz"
     crop_dir  = raw_dir / "roboflow_fawwaz_crops"
 
@@ -132,7 +117,7 @@ def download_roboflow_fawwaz(raw_dir: Path, api_key: str) -> Path:
         return crop_dir
 
     if not api_key:
-        log.warning("ROBOFLOW_API_KEY tidak di-set — skip fawwaz source.")
+        log.warning("ROBOFLOW_API_KEY tidak di-set -- skip fawwaz source.")
         return crop_dir
 
     try:
@@ -154,25 +139,15 @@ def download_roboflow_fawwaz(raw_dir: Path, api_key: str) -> Path:
         log.error(f"Download fawwaz gagal: {e}")
         return crop_dir
 
-    # ── Crop bounding boxes → klasifikasi per kelas
-    log.info("Cropping bounding boxes → class folders.")
+    log.info("Cropping bounding boxes -> class folders.")
     _crop_yolov8_to_classification(dest_dir, crop_dir)
 
     return crop_dir
 
 
 def _crop_yolov8_to_classification(yolo_dir: Path, out_dir: Path):
-    """
-    YOLOv8 format:
-      images/train/*.jpg
-      labels/train/*.txt   (class_idx cx cy w h  — normalized 0..1)
-    data.yaml berisi nama kelas.
-
-    Output: out_dir/<class_name>/<img>_<idx>.jpg
-    """
     import yaml
 
-    # Baca class names dari data.yaml
     yaml_path = yolo_dir / "data.yaml"
     if not yaml_path.exists():
         yaml_path = next(yolo_dir.rglob("data.yaml"), None)
@@ -220,22 +195,19 @@ def _crop_yolov8_to_classification(yolo_dir: Path, out_dir: Path):
                 cls_idx = int(parts[0])
                 cx, cy, bw, bh = map(float, parts[1:5])
 
-                # Convert normalized → pixel coords
                 x1 = int((cx - bw / 2) * W)
                 y1 = int((cy - bh / 2) * H)
                 x2 = int((cx + bw / 2) * W)
                 y2 = int((cy + bh / 2) * H)
 
-                # Clamp ke batas gambar
                 x1, y1 = max(0, x1), max(0, y1)
                 x2, y2 = min(W, x2), min(H, y2)
 
                 if x2 <= x1 or y2 <= y1:
-                    continue  # bbox tidak valid
+                    continue
 
                 crop = img.crop((x1, y1, x2, y2))
 
-                # Resolve class name
                 if cls_idx < len(class_names):
                     raw_cls = class_names[cls_idx]
                     cls_name = normalize_class_name(raw_cls)
@@ -255,7 +227,6 @@ def _crop_yolov8_to_classification(yolo_dir: Path, out_dir: Path):
     log.info(f"Total crops: {n_cropped} gambar dari fawwaz dataset")
 
 
-# COLLECT, DEDUPLICATE, VALIDATE
 def collect_images_from_source(source_dir: Path) -> dict[str, list[Path]]:
     class_images: dict[str, list[Path]] = defaultdict(list)
     for img_path in tqdm(list(source_dir.rglob("*")), desc=f"Scanning {source_dir.name}", leave=False):
@@ -289,12 +260,10 @@ def validate_images(paths: list[Path]) -> list[Path]:
     return valid
 
 
-# SPLIT & COPY
 def build_splits(
     class_images: dict[str, list[Path]],
     ratio: dict,
     seed: int,
-    ood_source_tag: str = "roboflow_thesis",
 ) -> dict[str, dict[str, list[Path]]]:
     splits: dict[str, dict[str, list[Path]]] = {
         "train": defaultdict(list),
@@ -303,19 +272,14 @@ def build_splits(
     }
 
     for cls, paths in class_images.items():
-        ood = [p for p in paths if ood_source_tag in str(p)]
-        iid = [p for p in paths if ood_source_tag not in str(p)]
-
-        splits["test"][cls].extend(ood)
-
-        if len(iid) < 3:
-            log.warning(f"Class '{cls}' hanya {len(iid)} gambar in-distribution.")
-            splits["train"][cls].extend(iid)
+        if len(paths) < 3:
+            log.warning(f"Class '{cls}' hanya {len(paths)} gambar.")
+            splits["train"][cls].extend(paths)
             continue
 
         val_test_ratio = ratio["val"] + ratio["test"]
         train_imgs, val_test_imgs = train_test_split(
-            iid, test_size=val_test_ratio, random_state=seed
+            paths, test_size=val_test_ratio, random_state=seed
         )
         relative_test = ratio["test"] / val_test_ratio
         val_imgs, test_imgs = train_test_split(
@@ -367,7 +331,6 @@ def print_report(splits: dict):
     log.info("=" * 45)
 
 
-# MAIN
 def parse_args():
     p = argparse.ArgumentParser(description="Aksara Jawa dataset downloader & organizer")
     p.add_argument("--roboflow-key", default=ROBOFLOW_API_KEY)
@@ -388,26 +351,18 @@ def main():
 
     source_dirs = []
 
-    # 1. GitHub
-    log.info("\n[1/4] GitHub source.")
+    log.info("\n[1/3] GitHub source.")
     source_dirs.append(download_github_vzrenggamani(raw_dir))
 
-    # 2 & 3. Roboflow
     if not args.skip_roboflow:
         api_key = args.roboflow_key
 
-        log.info("\n[1/4] Roboflow: fawwaz (object detection → crop).")
+        log.info("\n[2/3] Roboflow: fawwaz (object detection -> crop).")
         fawwaz_dir = download_roboflow_fawwaz(raw_dir, api_key)
         if fawwaz_dir.exists() and any(fawwaz_dir.rglob("*.jpg")):
             source_dirs.append(fawwaz_dir)
 
-        log.info("\n[1/4] Roboflow: thesis (OOD test, auto-probe version).")
-        thesis_dir = download_roboflow_thesis(raw_dir, api_key)
-        if thesis_dir.exists() and any(thesis_dir.rglob("*.jpg")):
-            source_dirs.append(thesis_dir)
-
-    # 2. Collect & clean
-    log.info("\n[2/4] Collecting dan cleaning images.")
+    log.info("\n[2/3] Collecting dan cleaning images." if args.skip_roboflow else "\n[3/3] Collecting dan cleaning images.")
     all_class_images: dict[str, list[Path]] = defaultdict(list)
 
     for src_dir in source_dirs:
@@ -429,12 +384,9 @@ def main():
     total = sum(len(v) for v in all_class_images.values())
     log.info(f"  Total clean images: {total}")
 
-    # 3. Split
-    log.info("\n[3/4] Splitting.")
+    step = "3/3" if args.skip_roboflow else "4/4" if not args.skip_roboflow else "3/3"
+    log.info(f"\n[{step}] Splitting & writing dataset structure.")
     splits = build_splits(all_class_images, SPLIT_RATIO, SEED)
-
-    # 4. Copy
-    log.info("\n[4/4] Writing dataset structure.")
     copy_splits(splits, base_dir)
 
     print_report(splits)

@@ -1,14 +1,3 @@
-"""
-PyTorch Dataset & DataLoader untuk Aksara Jawa.
-
-Design choices:
-  - Lazy loading via PIL — RAM tidak meledak untuk dataset besar
-  - Grayscale conversion built-in — warna tidak informatif untuk handwriting
-  - Square padding sebelum resize → preserve aspect ratio (penting!)
-    Jika langsung resize ke 64x64, gambar landscape akan ter-squish dan
-    fitur stroke akan terdistorsi.
-"""
-
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -22,14 +11,6 @@ from tqdm.auto import tqdm
 
 
 class AksaraJawaDataset(Dataset):
-    """
-    Expects folder structure:
-        root/
-        ├── ha/   image_001.jpg
-        ├── na/   image_002.jpg
-        └── ...
-    """
-
     def __init__(
         self,
         root: Path,
@@ -42,7 +23,6 @@ class AksaraJawaDataset(Dataset):
         if not self.root.exists():
             raise FileNotFoundError(f"Dataset root tidak ada: {self.root}")
 
-        # Bangun index: (image_path, class_idx)
         self.samples: list[tuple[Path, int]] = []
         for cls in CLASSES:
             cls_dir = self.root / cls
@@ -51,8 +31,6 @@ class AksaraJawaDataset(Dataset):
             for img_path in tqdm(list(cls_dir.iterdir()), desc=f"Index {cls}", leave=False):
                 if img_path.suffix.lower() in valid_extensions:
                     self.samples.append((img_path, CLASS_TO_IDX[cls]))
-
-            # Show progress when indexing a class folder (tqdm uses list to know length)
 
         if not self.samples:
             raise RuntimeError(f"Tidak ada gambar valid di {self.root}")
@@ -63,21 +41,9 @@ class AksaraJawaDataset(Dataset):
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
         img_path, label = self.samples[idx]
 
-        # Load + grayscale (PIL 'L' mode = luminance, single channel)
         img = Image.open(img_path).convert("L")
-
-        # 1. Auto-contrast: stretch dynamic range ke [0, 255].
-        #    Tanpa ini, stroke yang tipis dan light-gray akan hilang setelah resize.
-        #    cutoff=2 → buang 2% piksel paling gelap & paling terang sebelum stretch.
         img = ImageOps.autocontrast(img, cutoff=2)
-
-        # 2. Invert: background hitam, stroke putih.
-        #    Lebih natural untuk CNN — stroke = "fitur positif" yang di-amplify ReLU.
-        #    Tanpa invert, fitur diskriminatif (stroke) justru bernilai rendah.
         img = ImageOps.invert(img)
-
-        # 3. Square padding (preserve aspect ratio).
-        #    Padding pakai 0 (hitam) karena sekarang background = hitam.
         img = ImageOps.pad(img, (max(img.size), max(img.size)), color=0, centering=(0.5, 0.5))
 
         if self.transform:
@@ -87,17 +53,8 @@ class AksaraJawaDataset(Dataset):
 
 
 def build_transforms(cfg: Config) -> tuple[Callable, Callable]:
-    """
-    Returns (train_transform, eval_transform).
-
-    Augmentasi training disesuaikan untuk handwriting:
-      - Rotasi kecil (12°) karena data sudah punya variasi rotasi alami
-      - Affine: translation + scale + shear → simulasi variasi penulisan
-      - ColorJitter: handle variasi ketebalan stroke / scan brightness
-      - TIDAK ADA flip — karakter tidak simetris
-    """
     common_end = [
-        transforms.ToTensor(),                                  # [0, 255] → [0, 1], shape (1, H, W)
+        transforms.ToTensor(),
         transforms.Normalize(cfg.norm_mean, cfg.norm_std),
     ]
 
@@ -108,16 +65,13 @@ def build_transforms(cfg: Config) -> tuple[Callable, Callable]:
             translate=(cfg.aug_translate, cfg.aug_translate),
             scale=cfg.aug_scale,
             shear=cfg.aug_shear_deg,
-            fill=0,  # background = hitam (0) setelah invert preprocessing
+            fill=0,
         ),
         transforms.ColorJitter(
             brightness=cfg.aug_brightness,
             contrast=cfg.aug_contrast,
         ),
         *common_end,
-        # RandomErasing harus SETELAH ToTensor (butuh Tensor, bukan PIL Image).
-        # value=0 → fill dengan warna background (hitam) setelah invert preprocessing.
-        # Efek: hapus patch acak → model belajar dari seluruh karakter, bukan satu stroke khas.
         transforms.RandomErasing(
             p=cfg.aug_erasing_prob,
             scale=(0.02, 0.15),
@@ -134,7 +88,9 @@ def build_transforms(cfg: Config) -> tuple[Callable, Callable]:
     return train_tf, eval_tf
 
 
-def build_dataloaders(cfg: Config) -> dict[str, DataLoader]:
+def build_dataloaders(
+    cfg: Config,
+) -> tuple[dict[str, DataLoader], dict[str, AksaraJawaDataset]]:
     train_tf, eval_tf = build_transforms(cfg)
 
     datasets = {
