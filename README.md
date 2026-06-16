@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # lasifikasi Aksara Jawa (Hanacaraka) dengan CNN PyTorch
+=======
+# Klasifikasi Aksara Jawa (Hanacaraka) dengan CNN PyTorc
+>>>>>>> 6f7bb977de452edd0bbba376a75ee23d810e15ed
 
 Proyek tugas mata kuliah **Pembelajaran Mesin Semester 4** — membangun Convolutional Neural Network (CNN) untuk mengklasifikasikan 20 karakter aksara Jawa (*Hanacaraka*) dari gambar tulisan tangan.
 
