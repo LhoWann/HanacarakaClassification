@@ -322,7 +322,7 @@ Output: (B, 20)
 | FC1 Linear | 256x128 + 128 | 33,024 |
 | FC1 BN1d | 2x128 | 256 |
 | FC2 Linear | 128x20 + 20 | 2,580 |
-| **Total** | | **424,180** |
+| **Total** | | **424,052** |
 
 ### Keputusan Desain
 
@@ -405,19 +405,23 @@ Aktif otomatis jika GPU tersedia. Keuntungan: ~2x speedup, hemat VRAM ~50%.
 
 Lihat laporan lengkap di [result.md](result.md).
 
-### SimpleCNN (Baseline)
+### Ringkasan Hasil
 
-| Metrik | Nilai |
-|--------|-------|
-| Test Accuracy | **89.98%** |
-| F1 Macro | **89.54%** |
+| Metrik | SimpleCNN | ImprovedCNN |
+|--------|-----------|-------------|
+| Test Accuracy | **87.50%** | **87.50%** |
+| F1 Macro | **87.03%** | **86.95%** |
+| F1 Weighted | 87.44% | 87.32% |
+| Test Loss | 0.5977 | 0.4866 |
+| Best Val Accuracy | 85.77% | 86.00% |
+| Total Parameters | 393,460 | 424,052 |
 
-**Kelas paling sulit:**
+**Kelas paling sulit (kedua model):**
 
-| Kelas | F1-score |
-|-------|----------|
-| `ha` | 0.575 |
-| `la` | 0.629 |
+| Kelas | SimpleCNN F1 | ImprovedCNN F1 |
+|-------|-------------|----------------|
+| `ha` | 0.5412 | 0.5882 |
+| `la` | 0.5672 | 0.6000 |
 
 ---
 
