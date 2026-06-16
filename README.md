@@ -85,7 +85,7 @@ dataset/
 │   └── ...   (20 folder kelas)
 ├── val/
 ├── test/
-└── raw/      (raw download — di-gitignore)
+└── raw/      
 ```
 
 ---
