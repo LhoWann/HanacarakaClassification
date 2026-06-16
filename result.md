@@ -53,6 +53,18 @@ Penambahan hidden layer 256 -> 128 -> 20 dengan BatchNorm1d memberikan ruang unt
 
 Implementasi Grad-CAM memungkinkan visualisasi bagian gambar yang paling berpengaruh terhadap prediksi. Ini penting untuk verifikasi bahwa model benar-benar belajar dari stroke aksara (bukan artefak background atau noise), dan untuk mengidentifikasi kelemahan model pada pasangan kelas yang sering tertukar.
 
+### 2.6 Pendekatan From-Scratch sebagai Alternatif terhadap Pretrained Model
+
+Sebagian besar penelitian klasifikasi aksara Jawa yang ada mengandalkan model pretrained seperti ResNet atau VGG yang dilatih pada ImageNet sebagai titik awal. Pendekatan tersebut memang menghasilkan akurasi tinggi, namun menciptakan ketergantungan pada representasi fitur domain yang berbeda secara fundamental dari aksara tulisan tangan. Proyek ini secara sadar memilih untuk melatih model dari nol (*from scratch*) dengan arsitektur yang dirancang khusus, membuktikan bahwa CNN dengan ~400K parameter yang dilengkapi preprocessing domain-specific dan regularisasi berlapis mampu mencapai performa yang kompetitif tanpa bergantung pada bobot pretrained eksternal.
+
+### 2.7 Evaluasi Lintas Domain untuk Estimasi Generalisasi yang Lebih Robust
+
+Berbeda dari penelitian yang hanya mengevaluasi model pada satu sumber data yang homogen, proyek ini memanfaatkan dua sumber dataset dengan karakteristik berbeda: gambar tulisan tangan in-distribution dari GitHub vzrenggamani dan gambar hasil cropping bounding box dari Roboflow. Strategi evaluasi dengan data dari distribusi yang berbeda ini memberikan estimasi generalisasi yang lebih realistis dan robust dibandingkan evaluasi single-domain, karena model diuji pada variasi kondisi akuisisi gambar yang mencerminkan penggunaan nyata sistem OCR aksara Jawa.
+
+### 2.8 Target Akurasi Kompetitif dengan Model Pretrained
+
+Proyek ini menetapkan target akurasi minimal **85%** pada test set sebagai ambang batas keberhasilan. Target ini dipilih secara strategis agar hasil yang diperoleh dari model *from scratch* ~400K parameter dapat diperbandingkan secara bermakna dengan pendekatan berbasis pretrained yang umumnya beroperasi di rentang 88-95% pada dataset serupa. Dengan kedua model (SimpleCNN dan ImprovedCNN) berhasil melampaui target ini pada akurasi 87.50%, penelitian ini menunjukkan bahwa gap performa antara model *from scratch* yang dirancang dengan tepat dan model pretrained tidak sebesar yang sering diasumsikan untuk domain aksara tulisan tangan dengan jumlah kelas terbatas.
+
 ---
 
 ## 3. Metodologi
