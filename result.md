@@ -77,18 +77,20 @@ Proyek ini menetapkan target akurasi minimal **85%** pada test set sebagai amban
 
 ### 4.1 Dataset
 
-| Split | Jumlah Gambar | Sumber |
-|-------|--------------|--------|
-| Train | 3,898 | GitHub vzrenggamani (70%) |
-| Val   | 836   | GitHub vzrenggamani (15%) |
-| Test  | 848   | GitHub vzrenggamani (15%) |
-| **Total** | **5,582** | |
+| Split           | Jumlah Gambar   |
+| --------------- | --------------- |
+| Train           | 3,898           |
+| Val             | 836             |
+| Test            | 848             |
+| **Total** | **5,582** |
 
 **Sumber Data:**
+
 - **GitHub vzrenggamani** (`aksarajawa-hanacaraka`): Sumber utama gambar tulisan tangan in-distribution.
 - **Roboflow fawwaz** (opsional): Dataset object-detection yang di-crop per bounding box.
 
 **Strategi Split:**
+
 - Stratified split 70/15/15 menggunakan `sklearn.model_selection.train_test_split` dengan `random_state=42`.
 - Deduplication berbasis MD5 hash mencegah kebocoran data antar split.
 - Validasi integritas setiap gambar via `PIL.Image.verify()`.
@@ -97,14 +99,14 @@ Proyek ini menetapkan target akurasi minimal **85%** pada test set sebagai amban
 
 Dieksekusi per-gambar di dalam `AksaraJawaDataset.__getitem__`:
 
-| Tahap | Operasi | Tujuan |
-|-------|---------|--------|
-| 1 | `convert("L")` | Grayscale: warna tidak informatif untuk handwriting |
-| 2 | `ImageOps.autocontrast(cutoff=2)` | Stretch dynamic range, perkuat stroke tipis |
-| 3 | `ImageOps.invert()` | Background hitam, stroke putih |
-| 4 | `ImageOps.pad(square, color=0)` | Preserve aspect ratio |
-| 5 | `Resize(96x96)` | Input standar model |
-| 6 | `ToTensor() + Normalize(0.10, 0.25)` | Normalisasi distribusi |
+| Tahap | Operasi                                | Tujuan                                              |
+| ----- | -------------------------------------- | --------------------------------------------------- |
+| 1     | `convert("L")`                       | Grayscale: warna tidak informatif untuk handwriting |
+| 2     | `ImageOps.autocontrast(cutoff=2)`    | Stretch dynamic range, perkuat stroke tipis         |
+| 3     | `ImageOps.invert()`                  | Background hitam, stroke putih                      |
+| 4     | `ImageOps.pad(square, color=0)`      | Preserve aspect ratio                               |
+| 5     | `Resize(96x96)`                      | Input standar model                                 |
+| 6     | `ToTensor() + Normalize(0.10, 0.25)` | Normalisasi distribusi                              |
 
 ### 4.3 Arsitektur Model
 
@@ -133,15 +135,15 @@ Total Parameters: 424,052
 
 ### 4.4 Strategi Training
 
-| Komponen | Pilihan | Nilai |
-|----------|---------|-------|
-| Optimizer | AdamW | lr=1.2e-3, weight_decay=1e-4 |
-| Loss | CrossEntropyLoss | label_smoothing=0.05 |
-| LR Scheduler | Linear Warmup + Cosine Annealing | warmup=2 epoch |
-| Gradient Clipping | `clip_grad_norm_` | max_norm=1.0 |
-| Early Stopping | Patience | 12 epoch tanpa peningkatan val_acc |
-| Mixed Precision | AMP | Aktif otomatis jika GPU tersedia |
-| Max Epochs | | 50 |
+| Komponen          | Pilihan                          | Nilai                              |
+| ----------------- | -------------------------------- | ---------------------------------- |
+| Optimizer         | AdamW                            | lr=1.2e-3, weight_decay=1e-4       |
+| Loss              | CrossEntropyLoss                 | label_smoothing=0.05               |
+| LR Scheduler      | Linear Warmup + Cosine Annealing | warmup=2 epoch                     |
+| Gradient Clipping | `clip_grad_norm_`              | max_norm=1.0                       |
+| Early Stopping    | Patience                         | 12 epoch tanpa peningkatan val_acc |
+| Mixed Precision   | AMP                              | Aktif otomatis jika GPU tersedia   |
+| Max Epochs        |                                  | 50                                 |
 
 **Label Smoothing (ε=0.05):** Label `[1, 0, ..., 0]` diubah menjadi `[0.9525, 0.0025, ...]` untuk mencegah overconfidence pada kelas mudah dan meningkatkan generalisasi pada kelas sulit.
 
@@ -167,32 +169,32 @@ Total Parameters: 424,052
 
 ### 5.2 Perbandingan SimpleCNN vs ImprovedCNN
 
-| Metrik | SimpleCNN (Baseline) | ImprovedCNN |
-|--------|---------------------|-------------|
-| Test Accuracy | 87.50% | 87.50% |
-| F1 Macro | 87.03% | 86.95% |
-| F1 Weighted | 87.44% | 87.32% |
-| Precision Macro | 87.41% | 87.40% |
-| Recall Macro | 87.01% | 87.01% |
-| Test Loss | 0.5977 | 0.4866 |
-| Best Val Accuracy | 85.77% | 86.00% |
-| Total Parameters | 393,460 | 424,052 |
-| Total Epochs | 50 | 50 |
+| Metrik            | SimpleCNN (Baseline) | ImprovedCNN |
+| ----------------- | -------------------- | ----------- |
+| Test Accuracy     | 87.50%               | 87.50%      |
+| F1 Macro          | 87.03%               | 86.95%      |
+| F1 Weighted       | 87.44%               | 87.32%      |
+| Precision Macro   | 87.41%               | 87.40%      |
+| Recall Macro      | 87.01%               | 87.01%      |
+| Test Loss         | 0.5977               | 0.4866      |
+| Best Val Accuracy | 85.77%               | 86.00%      |
+| Total Parameters  | 393,460              | 424,052     |
+| Total Epochs      | 50                   | 50          |
 
 ![Metrics Comparison](outputs/comparison/metrics_comparison.png)
 
 **Perubahan ImprovedCNN vs SimpleCNN:**
 
-| Komponen | SimpleCNN | ImprovedCNN | Alasan |
-|----------|-----------|-------------|--------|
-| FC Head | 256 -> 20 | 256 -> 128 -> 20 | Representasi intermediate lebih kaya |
-| Label Smoothing | 0.0 | 0.05 | Regularisasi pada kelas sulit |
-| Learning Rate | 2e-3 | 1.2e-3 | Kurangi osilasi val_acc |
-| norm_std | 0.20 | 0.25 | Range normalisasi lebih terkontrol |
-| Weight Decay | 5e-5 | 1e-4 | Regularisasi lebih kuat |
-| RandomErasing | -- | p=0.15 | Invariansi terhadap oklusi parsial |
-| Warmup Epochs | 1 | 2 | BatchNorm lebih stabil di awal |
-| Dropout | 0.3 | 0.4 / 0.2 | Berlapis sesuai two-layer FC head |
+| Komponen        | SimpleCNN | ImprovedCNN      | Alasan                               |
+| --------------- | --------- | ---------------- | ------------------------------------ |
+| FC Head         | 256 -> 20 | 256 -> 128 -> 20 | Representasi intermediate lebih kaya |
+| Label Smoothing | 0.0       | 0.05             | Regularisasi pada kelas sulit        |
+| Learning Rate   | 2e-3      | 1.2e-3           | Kurangi osilasi val_acc              |
+| norm_std        | 0.20      | 0.25             | Range normalisasi lebih terkontrol   |
+| Weight Decay    | 5e-5      | 1e-4             | Regularisasi lebih kuat              |
+| RandomErasing   | --        | p=0.15           | Invariansi terhadap oklusi parsial   |
+| Warmup Epochs   | 1         | 2                | BatchNorm lebih stabil di awal       |
+| Dropout         | 0.3       | 0.4 / 0.2        | Berlapis sesuai two-layer FC head    |
 
 ### 5.3 Evaluasi Test Set
 
@@ -218,35 +220,35 @@ Total Parameters: 424,052
 
 **F1 Per Kelas (Test Set):**
 
-| Kelas | SimpleCNN F1 | ImprovedCNN F1 | Delta |
-|-------|-------------|----------------|-------|
-| ha  | 0.5412 | 0.5882 | +0.0471 |
-| na  | 0.9091 | 0.8913 | -0.0178 |
-| ca  | 0.9425 | 0.9130 | -0.0295 |
-| ra  | 0.8989 | 0.9302 | +0.0313 |
-| ka  | 0.8958 | 0.8936 | -0.0022 |
-| da  | 0.8941 | 0.8333 | -0.0608 |
-| ta  | 0.8286 | 0.8451 | +0.0165 |
-| sa  | 0.9032 | 0.8571 | -0.0461 |
-| wa  | 0.9070 | 0.9873 | +0.0804 |
-| la  | 0.5672 | 0.6000 | +0.0328 |
-| pa  | 0.9438 | 0.9053 | -0.0385 |
-| dha | 0.9048 | 0.9000 | -0.0048 |
-| ja  | 0.9024 | 0.9302 | +0.0278 |
-| ya  | 0.8958 | 0.9053 | +0.0094 |
-| nya | 0.9213 | 0.9438 | +0.0225 |
-| ma  | 0.9438 | 0.9438 | 0.0000 |
-| ga  | 0.8788 | 0.8000 | -0.0788 |
-| ba  | 0.8780 | 0.9157 | +0.0376 |
-| tha | 0.9213 | 0.9195 | -0.0018 |
-| nga | 0.9286 | 0.8864 | -0.0422 |
+| Kelas | SimpleCNN F1 | ImprovedCNN F1 | Delta   |
+| ----- | ------------ | -------------- | ------- |
+| ha    | 0.5412       | 0.5882         | +0.0471 |
+| na    | 0.9091       | 0.8913         | -0.0178 |
+| ca    | 0.9425       | 0.9130         | -0.0295 |
+| ra    | 0.8989       | 0.9302         | +0.0313 |
+| ka    | 0.8958       | 0.8936         | -0.0022 |
+| da    | 0.8941       | 0.8333         | -0.0608 |
+| ta    | 0.8286       | 0.8451         | +0.0165 |
+| sa    | 0.9032       | 0.8571         | -0.0461 |
+| wa    | 0.9070       | 0.9873         | +0.0804 |
+| la    | 0.5672       | 0.6000         | +0.0328 |
+| pa    | 0.9438       | 0.9053         | -0.0385 |
+| dha   | 0.9048       | 0.9000         | -0.0048 |
+| ja    | 0.9024       | 0.9302         | +0.0278 |
+| ya    | 0.8958       | 0.9053         | +0.0094 |
+| nya   | 0.9213       | 0.9438         | +0.0225 |
+| ma    | 0.9438       | 0.9438         | 0.0000  |
+| ga    | 0.8788       | 0.8000         | -0.0788 |
+| ba    | 0.8780       | 0.9157         | +0.0376 |
+| tha   | 0.9213       | 0.9195         | -0.0018 |
+| nga   | 0.9286       | 0.8864         | -0.0422 |
 
 **Kelas dengan F1 Terendah:**
 
-| Kelas | SimpleCNN F1 | ImprovedCNN F1 | Analisis |
-|-------|-------------|----------------|---------|
-| `ha` | 0.5412 | 0.5882 | Visual mirip dengan `na`; 15/41 sampel SimpleCNN tertukar ke `la` dan `ha` |
-| `la` | 0.5672 | 0.6000 | Sering tertukar dengan `ha`; 15/36 sampel SimpleCNN salah ke `ha` |
+| Kelas  | SimpleCNN F1 | ImprovedCNN F1 | Analisis                                                                        |
+| ------ | ------------ | -------------- | ------------------------------------------------------------------------------- |
+| `ha` | 0.5412       | 0.5882         | Visual mirip dengan`na`; 15/41 sampel SimpleCNN tertukar ke `la` dan `ha` |
+| `la` | 0.5672       | 0.6000         | Sering tertukar dengan`ha`; 15/36 sampel SimpleCNN salah ke `ha`            |
 
 ---
 
