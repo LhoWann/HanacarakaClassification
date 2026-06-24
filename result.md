@@ -67,9 +67,15 @@ Proyek ini menetapkan target akurasi minimal **85%** pada test set sebagai amban
 
 ---
 
-## 3. Metodologi
+## 3. Flowchart Pipeline
 
-### 3.1 Dataset
+![Flowchart Pipeline](Flowchart.png)
+
+---
+
+## 4. Metodologi
+
+### 4.1 Dataset
 
 | Split | Jumlah Gambar | Sumber |
 |-------|--------------|--------|
@@ -87,7 +93,7 @@ Proyek ini menetapkan target akurasi minimal **85%** pada test set sebagai amban
 - Deduplication berbasis MD5 hash mencegah kebocoran data antar split.
 - Validasi integritas setiap gambar via `PIL.Image.verify()`.
 
-### 3.2 Preprocessing
+### 4.2 Preprocessing
 
 Dieksekusi per-gambar di dalam `AksaraJawaDataset.__getitem__`:
 
@@ -100,7 +106,7 @@ Dieksekusi per-gambar di dalam `AksaraJawaDataset.__getitem__`:
 | 5 | `Resize(96x96)` | Input standar model |
 | 6 | `ToTensor() + Normalize(0.10, 0.25)` | Normalisasi distribusi |
 
-### 3.3 Arsitektur Model
+### 4.3 Arsitektur Model
 
 **SimpleCNN (Baseline):**
 
@@ -125,7 +131,7 @@ Classifier:
 Total Parameters: 424,052
 ```
 
-### 3.4 Strategi Training
+### 4.4 Strategi Training
 
 | Komponen | Pilihan | Nilai |
 |----------|---------|-------|
@@ -143,9 +149,9 @@ Total Parameters: 424,052
 
 ---
 
-## 4. Hasil Eksperimen
+## 5. Hasil Eksperimen
 
-### 4.1 Training Curves
+### 5.1 Training Curves
 
 **SimpleCNN:**
 
@@ -159,7 +165,7 @@ Total Parameters: 424,052
 
 ![Training Comparison](outputs/comparison/training_comparison.png)
 
-### 4.2 Perbandingan SimpleCNN vs ImprovedCNN
+### 5.2 Perbandingan SimpleCNN vs ImprovedCNN
 
 | Metrik | SimpleCNN (Baseline) | ImprovedCNN |
 |--------|---------------------|-------------|
@@ -188,7 +194,7 @@ Total Parameters: 424,052
 | Warmup Epochs | 1 | 2 | BatchNorm lebih stabil di awal |
 | Dropout | 0.3 | 0.4 / 0.2 | Berlapis sesuai two-layer FC head |
 
-### 4.3 Evaluasi Test Set
+### 5.3 Evaluasi Test Set
 
 **SimpleCNN - Confusion Matrix:**
 
@@ -244,7 +250,7 @@ Total Parameters: 424,052
 
 ---
 
-## 5. Analisis Grad-CAM
+## 6. Analisis Grad-CAM
 
 **SimpleCNN - Contoh Grad-CAM:**
 
@@ -269,9 +275,9 @@ Grad-CAM memvisualisasikan region pada gambar yang paling mempengaruhi prediksi 
 
 ---
 
-## 6. Diskusi
+## 7. Diskusi
 
-### 6.1 Kekuatan
+### 7.1 Kekuatan
 
 - Pipeline end-to-end yang reprodusibel tanpa ketergantungan pada notebook.
 - Preprocessing domain-specific terbukti efektif mempertahankan detail stroke tipis.
@@ -279,7 +285,7 @@ Grad-CAM memvisualisasikan region pada gambar yang paling mempengaruhi prediksi 
 - Grad-CAM memberikan bukti bahwa model belajar dari fitur yang semantically meaningful (stroke aksara).
 - ImprovedCNN mencapai test loss lebih rendah (0.4866 vs 0.5977) dengan jumlah parameter hampir sama, menunjukkan kalibrasi probabilitas yang lebih baik.
 
-### 6.2 Keterbatasan
+### 7.2 Keterbatasan
 
 - **Akurasi identik di test set**: Kedua model mencapai 87.50% test accuracy. Peningkatan ImprovedCNN terlihat pada loss dan beberapa kelas individual, bukan akurasi global.
 - **Dataset kecil**: ~280 gambar per kelas relatif sedikit untuk deep learning. Transfer learning dari pretrained model (ResNet, EfficientNet) berpotensi memberikan peningkatan signifikan.
@@ -287,7 +293,7 @@ Grad-CAM memvisualisasikan region pada gambar yang paling mempengaruhi prediksi 
 - **Kelas ambigu inheren**: Beberapa pasangan kelas (`ha`/`la`, `ha`/`na`) memiliki kemiripan visual yang sangat tinggi bahkan bagi penutur asli. Akurasi 100% mungkin tidak achievable tanpa konteks sekitar karakter.
 - **Hanya aksara dasar**: Tidak mencakup sandhangan (diakritik), pasangan, atau aksara murda yang ada dalam sistem tulisan Jawa lengkap.
 
-### 6.3 Arah Pengembangan
+### 7.3 Arah Pengembangan
 
 1. **Transfer Learning**: Fine-tune ResNet-18/EfficientNet-B0 yang di-pretrain di ImageNet.
 2. **Dataset Augmentation Lanjutan**: CutMix, MixUp untuk meningkatkan robustness pada kelas yang mirip.
@@ -298,7 +304,7 @@ Grad-CAM memvisualisasikan region pada gambar yang paling mempengaruhi prediksi 
 
 ---
 
-## 7. Kesimpulan
+## 8. Kesimpulan
 
 Proyek ini berhasil membangun sistem klasifikasi aksara Jawa (Hanacaraka) berbasis CNN dengan:
 
