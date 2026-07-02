@@ -1,18 +1,18 @@
 {
   "SimpleCNN": {
-    "accuracy": 0.875,
-    "f1_macro": 0.8703170543747856,
-    "f1_weighted": 0.8744270992485002,
-    "precision_macro": 0.8741149202487432,
-    "recall_macro": 0.8700519936828787,
+    "accuracy": 0.9610849056603774,
+    "f1_macro": 0.9599787303365446,
+    "f1_weighted": 0.9609033204403805,
+    "precision_macro": 0.9618375333751826,
+    "recall_macro": 0.9596098708910678,
     "total_params": 393460
   },
   "ImprovedCNN": {
-    "accuracy": 0.875,
-    "f1_macro": 0.8694643462501176,
-    "f1_weighted": 0.8731879002032363,
-    "precision_macro": 0.8739975857080406,
-    "recall_macro": 0.8701028506849552,
+    "accuracy": 0.9811320754716981,
+    "f1_macro": 0.9806033562613747,
+    "f1_weighted": 0.981159202282208,
+    "precision_macro": 0.9813791903684292,
+    "recall_macro": 0.9803988143324501,
     "total_params": 424052
   }
 }

@@ -85,6 +85,32 @@ def model_display_name(model_name: str) -> str:
     return "SimpleCNN" if model_name == "simple" else "ImprovedCNN"
 
 
+def apply_best_params(cfg, model_name: str) -> bool:
+    params_path = cfg.artifact_dir / f"best_params_{model_name}.json"
+    if not params_path.exists():
+        return False
+    with open(params_path) as f:
+        data = json.load(f)
+    params = data.get("best_params", {})
+    param_map = {
+        "learning_rate":    "learning_rate",
+        "weight_decay":     "weight_decay",
+        "dropout":          "dropout",
+        "batch_size":       "batch_size",
+        "label_smoothing":  "label_smoothing",
+        "aug_rotation_deg": "aug_rotation_deg",
+        "aug_erasing_prob": "aug_erasing_prob",
+        "warmup_epochs":    "warmup_epochs",
+    }
+    for key, attr in param_map.items():
+        if key in params:
+            setattr(cfg, attr, params[key])
+    log.info(f"Loaded best params dari {params_path.name} (best_val_acc={data.get('best_val_acc', '?'):.4f})")
+    for k, v in params.items():
+        log.info(f"  {k}: {v}")
+    return True
+
+
 def get_model_out_dir(base_out_dir: Path, model_name: str) -> Path:
     return base_out_dir / MODEL_FOLDER_MAP[model_name]
 
@@ -240,6 +266,9 @@ def run_training(cfg, model_name: str, device: torch.device, out_dir: Path, save
 
     original_ckpt_name = cfg.checkpoint_name
     cfg.checkpoint_name = str(ckpt_dir / original_ckpt_name)
+
+    if not apply_best_params(cfg, model_name):
+        log.info("best_params JSON tidak ditemukan, menggunakan config default.")
 
     loaders, _ = build_dataloaders(cfg)
     model = build_model(model_name, cfg).to(device)

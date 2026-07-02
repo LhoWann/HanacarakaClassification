@@ -1,6 +1,6 @@
 # Klasifikasi Aksara Jawa (Hanacaraka) dengan CNN PyTorch
 
-Proyek tugas mata kuliah **Pembelajaran Mesin Semester 4** — membangun Convolutional Neural Network (CNN) untuk mengklasifikasikan 20 karakter aksara Jawa (*Hanacaraka*) dari gambar tulisan tangan.
+Proyek tugas mata kuliah **Pembelajaran Mesin Semester 4** — membangun Convolutional Neural Network (CNN) untuk mengklasifikasikan 20 karakter aksara Jawa (*Hanacaraka*) dari gambar tulisan tangan. Hyperparameter dioptimasi menggunakan **Optuna** untuk mencapai performa terbaik.
 
 ---
 
@@ -14,11 +14,12 @@ Proyek tugas mata kuliah **Pembelajaran Mesin Semester 4** — membangun Convolu
 6. [Cara Penggunaan Lengkap](#cara-penggunaan-lengkap)
 7. [Arsitektur Model](#arsitektur-model)
 8. [Preprocessing & Augmentasi](#preprocessing--augmentasi)
-9. [Strategi Training](#strategi-training)
-10. [Hasil Eksperimen](#hasil-eksperimen)
-11. [Explainability (Grad-CAM)](#explainability-grad-cam)
-12. [Konfigurasi Hyperparameter](#konfigurasi-hyperparameter)
-13. [Catatan Teknis](#catatan-teknis)
+9. [Hyperparameter Optimization (Optuna)](#hyperparameter-optimization-optuna)
+10. [Strategi Training](#strategi-training)
+11. [Hasil Eksperimen](#hasil-eksperimen)
+12. [Explainability (Grad-CAM)](#explainability-grad-cam)
+13. [Konfigurasi Hyperparameter](#konfigurasi-hyperparameter)
+14. [Catatan Teknis](#catatan-teknis)
 
 ---
 
@@ -103,6 +104,7 @@ KlasifikasiHanacaraka/
 ├── src/
 │   ├── __init__.py
 │   ├── main.py             # Entry point CLI utama
+│   ├── tune.py             # Optuna hyperparameter optimization
 │   ├── config.py           # Hyperparameter terpusat (dataclass Config + set_seed)
 │   ├── model.py            # SimpleCNN (baseline) + ImprovedCNN
 │   ├── dataset.py          # PyTorch Dataset, preprocessing, augmentasi
@@ -122,11 +124,13 @@ KlasifikasiHanacaraka/
 │   │   └── gradcam/
 │   └── comparison/         # Plot perbandingan kedua model
 │
-├── artifacts/              # Checkpoint model (auto-created saat training)
+├── artifacts/              # Checkpoint model & Optuna results
 │   ├── simple_cnn/
 │   │   └── best_model.pt
-│   └── improved_cnn/
-│       └── best_model.pt
+│   ├── improved_cnn/
+│   │   └── best_model.pt
+│   ├── best_params_simple.json     # Optuna best params SimpleCNN
+│   └── best_params_improved.json   # Optuna best params ImprovedCNN
 │
 ├── dataset/                # Dataset (di-gitignore)
 └── .venv/                  # Virtual environment Python
@@ -166,7 +170,7 @@ Untuk GPU dengan CUDA 12.8 (sesuai `requirements.txt`):
 
 ```bash
 pip install torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
-pip install scikit-learn pillow tqdm matplotlib requests pyyaml roboflow
+pip install scikit-learn pillow tqdm matplotlib requests pyyaml roboflow optuna
 ```
 
 ### Dependensi Utama
@@ -178,6 +182,7 @@ pip install scikit-learn pillow tqdm matplotlib requests pyyaml roboflow
 | `Pillow` | 12.2.0 | Preprocessing gambar (autocontrast, invert, padding) |
 | `tqdm` | 4.67.3 | Progress bar training |
 | `matplotlib` | 3.10.9 | Visualisasi kurva training, Grad-CAM overlay |
+| `optuna` | >=3.6.0 | Hyperparameter optimization (Bayesian TPE) |
 | `requests` | 2.34.2 | Download dataset dari GitHub |
 | `roboflow` | 1.3.8 | Download dataset Roboflow (opsional) |
 
@@ -191,19 +196,23 @@ cd src
 python download_dataset.py --skip-roboflow
 cd ..
 
-# 2. Jalankan semua pipeline (EDA + Training kedua model + Evaluasi + Grad-CAM + Comparison)
+# 2. Jalankan Optuna HPO (opsional, sudah ada best_params di artifacts/)
+python src/tune.py --model both --n-trials 30
+
+# 3. Jalankan semua pipeline (EDA + Training + Evaluasi + Grad-CAM + Comparison)
+#    Otomatis menggunakan best params dari Optuna jika tersedia
 python src/main.py --mode all
 
-# 3. Lihat hasil di folder outputs/simple_cnn/, outputs/improved_cnn/, outputs/comparison/
+# 4. Lihat hasil di folder outputs/
 ```
 
 ---
 
 ## Cara Penggunaan Lengkap
 
-`src/main.py` mendukung beberapa mode dan opsi model:
+### Pipeline Utama (main.py)
 
-### Mode yang Tersedia
+`src/main.py` mendukung beberapa mode dan opsi model:
 
 | Mode | Deskripsi | Output |
 |------|-----------|--------|
@@ -213,6 +222,21 @@ python src/main.py --mode all
 | `gradcam` | Visualisasi Grad-CAM heatmap per kelas | `outputs/<model>/gradcam/` |
 | `compare` | Perbandingan metrik dan F1 per kelas antara SimpleCNN vs ImprovedCNN | `outputs/comparison/` |
 | `all` | Jalankan semua mode berurutan untuk kedua model | Semua folder di atas |
+
+### Optuna HPO (tune.py)
+
+```bash
+# Tune kedua model (default 30 trials, 20 epoch per trial)
+python src/tune.py
+
+# Tune hanya ImprovedCNN dengan 50 trials
+python src/tune.py --model improved --n-trials 50
+
+# Tune cepat untuk verifikasi
+python src/tune.py --model improved --n-trials 3 --tune-epochs 5
+```
+
+Best params disimpan otomatis ke `artifacts/best_params_{model}.json` dan dimuat otomatis oleh `main.py` saat training.
 
 ### Contoh Perintah
 
@@ -226,8 +250,8 @@ python src/main.py --mode eda
 # Training hanya SimpleCNN
 python src/main.py --mode train --model simple
 
-# Training hanya ImprovedCNN, override epoch dan LR
-python src/main.py --mode train --model improved --epochs 30 --lr 1e-3
+# Training hanya ImprovedCNN
+python src/main.py --mode train --model improved
 
 # Training kedua model
 python src/main.py --mode train --model both
@@ -245,19 +269,30 @@ python src/main.py --mode gradcam --model both --gradcam-samples 3
 python src/main.py --mode all --device cpu
 ```
 
-### Argumen CLI
+### Argumen CLI (main.py)
 
 | Argument | Default | Keterangan |
 |----------|---------|------------|
 | `--mode` | `all` | Mode pipeline |
 | `--model` | `both` | `simple`, `improved`, atau `both` |
-| `--epochs` | dari config (50) | Override jumlah epoch |
-| `--lr` | dari config (1.2e-3) | Override learning rate |
-| `--batch-size` | dari config (64) | Override batch size |
+| `--epochs` | dari config (100) | Override jumlah epoch |
+| `--lr` | dari config / Optuna | Override learning rate |
+| `--batch-size` | dari config / Optuna | Override batch size |
 | `--device` | `auto` | `cuda`, `cpu`, atau `auto` |
 | `--output-dir` | `outputs` | Folder output visualisasi |
 | `--gradcam-samples` | `2` | Jumlah sampel per kelas untuk Grad-CAM |
 | `--no-save-plots` | `False` | Skip penyimpanan plot ke disk |
+
+### Argumen CLI (tune.py)
+
+| Argument | Default | Keterangan |
+|----------|---------|------------|
+| `--model` | `both` | `simple`, `improved`, atau `both` |
+| `--n-trials` | `30` | Jumlah trial Optuna |
+| `--tune-epochs` | `20` | Epoch per trial |
+| `--device` | `auto` | `cuda`, `cpu`, atau `auto` |
+| `--output-dir` | `artifacts` | Folder output best params JSON |
+| `--seed` | `42` | Seed untuk reproducibility |
 
 ---
 
@@ -274,7 +309,7 @@ Block 3: Conv2d(64->128, 3x3, pad=1) -> BN -> ReLU -> MaxPool(2)  ->  (B, 128, 1
 Block 4: Conv2d(128->256,3x3, pad=1) -> BN -> ReLU                ->  (B, 256, 12, 12)
          AdaptiveAvgPool2d(1x1)                                    ->  (B, 256,  1,  1)
 
-Classifier: Flatten -> Dropout(0.3) -> Linear(256 -> 20)
+Classifier: Flatten -> Dropout(0.302) -> Linear(256 -> 20)
 
 Output: (B, 20)  <- raw logits
 ```
@@ -306,9 +341,9 @@ AdaptiveAvgPool2d(1x1) -> (B, 256, 1, 1)
 
 Classifier:
   Flatten
-  Dropout(0.4)
+  Dropout(0.264)
   Linear(256 -> 128) -> BatchNorm1d(128) -> ReLU
-  Dropout(0.2)
+  Dropout(0.132)
   Linear(128 -> 20)
 
 Output: (B, 20)
@@ -360,27 +395,68 @@ Background dominan (~90% piksel = 0) membuat mean rendah. Range normalisasi: [-0
 
 | Augmentasi | Parameter | Alasan |
 |------------|-----------|--------|
-| `RandomAffine` | rotation=8, translate=8%, scale=90-110%, shear=5 | Simulasi variasi cara menulis |
+| `RandomAffine` | rotation, translate, scale, shear | Simulasi variasi cara menulis |
 | `ColorJitter` | brightness=0.10, contrast=0.10 | Variasi ketebalan stroke / kualitas scan |
-| `RandomErasing` | p=0.15, scale=(2%, 15%), value=0 | Invariansi terhadap oklusi parsial |
+| `RandomErasing` | p (dari Optuna), scale=(2%, 15%), value=0 | Invariansi terhadap oklusi parsial |
 
 **`HorizontalFlip` dan `VerticalFlip` tidak digunakan** karena aksara Jawa tidak simetris.
 
 ---
 
+## Hyperparameter Optimization (Optuna)
+
+### Metode
+
+Pencarian hyperparameter menggunakan **Optuna** dengan Tree-structured Parzen Estimator (TPE):
+
+- **30 trial** per model, masing-masing dilatih selama **20 epoch** dengan early stopping patience 5.
+- **MedianPruner** menghentikan trial yang jelas buruk lebih awal.
+- **Objective**: maximize best validation accuracy.
+
+### Ruang Pencarian
+
+| Parameter | Range/Choices |
+| --------- | ------------- |
+| `learning_rate` | [5e-4, 5e-3] log-uniform |
+| `weight_decay` | [1e-5, 1e-3] log-uniform |
+| `dropout` | [0.2, 0.5] |
+| `batch_size` | {32, 64, 128} |
+| `label_smoothing` | [0.0, 0.15] |
+| `aug_rotation_deg` | [5.0, 15.0] |
+| `aug_erasing_prob` | [0.0, 0.3] |
+| `warmup_epochs` | {1, 2, 3} |
+
+### Hasil Terbaik
+
+| Parameter | SimpleCNN | ImprovedCNN |
+| --------- | --------- | ----------- |
+| Learning Rate | 4.67e-3 | 3.89e-3 |
+| Weight Decay | 2.15e-4 | 5.04e-4 |
+| Dropout | 0.302 | 0.264 |
+| Batch Size | 32 | 32 |
+| Label Smoothing | 0.126 | 0.133 |
+| Aug Rotation | 7.60 | 7.82 |
+| Aug Erasing | 0.065 | 0.169 |
+| Warmup Epochs | 3 | 3 |
+| **Tune Val Acc** | **89.47%** | **90.67%** |
+
+Best params disimpan ke `artifacts/best_params_{model}.json` dan dimuat otomatis oleh `main.py`.
+
+---
+
 ## Strategi Training
 
-### Optimizer & Loss
+### Optimizer & Loss (Optuna-tuned)
 
-| Komponen | Pilihan | Nilai |
-|----------|---------|-------|
-| Optimizer | AdamW | lr=1.2e-3, weight_decay=1e-4 |
-| Loss | CrossEntropyLoss | label_smoothing=0.05 |
-| Gradient clipping | `clip_grad_norm_` | max_norm=1.0 |
+| Komponen | SimpleCNN | ImprovedCNN |
+|----------|-----------|-------------|
+| Optimizer | AdamW, lr=4.67e-3, wd=2.15e-4 | AdamW, lr=3.89e-3, wd=5.04e-4 |
+| Loss | CrossEntropy, smoothing=0.126 | CrossEntropy, smoothing=0.133 |
+| Gradient clipping | max_norm=1.0 | max_norm=1.0 |
 
 ### Learning Rate Schedule
 
-Linear Warmup (2 epoch) lalu Cosine Annealing:
+Linear Warmup (3 epoch) lalu Cosine Annealing:
 
 ```
 lr(t) = t / t_warmup                              (t < t_warmup)
@@ -391,8 +467,9 @@ Scheduler di-step **per-batch** agar warmup bekerja benar di epoch pertama.
 
 ### Early Stopping & Checkpoint
 
-- Patience: **12 epoch** tanpa peningkatan `val_accuracy`
-- Best model disimpan ke `artifacts/best_model.pt`
+- Max epochs: **100**
+- Patience: **20 epoch** tanpa peningkatan `val_accuracy`
+- Best model disimpan ke `artifacts/{model}/best_model.pt`
 - Checkpoint menyimpan: `epoch`, `model_state`, `val_acc`, `val_loss`
 
 ### Mixed Precision (AMP)
@@ -405,23 +482,28 @@ Aktif otomatis jika GPU tersedia. Keuntungan: ~2x speedup, hemat VRAM ~50%.
 
 Lihat laporan lengkap di [result.md](result.md).
 
-### Ringkasan Hasil
+### Ringkasan Hasil (setelah Optuna HPO)
 
 | Metrik | SimpleCNN | ImprovedCNN |
 |--------|-----------|-------------|
-| Test Accuracy | **87.50%** | **87.50%** |
-| F1 Macro | **87.03%** | **86.95%** |
-| F1 Weighted | 87.44% | 87.32% |
-| Test Loss | 0.5977 | 0.4866 |
-| Best Val Accuracy | 85.77% | 86.00% |
+| Test Accuracy | **96.11%** | **98.11%** |
+| F1 Macro | **96.00%** | **98.06%** |
+| F1 Weighted | 96.09% | 98.12% |
+| Test Loss | 0.2791 | 0.2133 |
+| Best Val Accuracy | 95.33% | 97.25% |
 | Total Parameters | 393,460 | 424,052 |
+| Total Epochs | 83 | 97 |
 
-**Kelas paling sulit (kedua model):**
+**Peningkatan dari hyperparameter manual:**
 
-| Kelas | SimpleCNN F1 | ImprovedCNN F1 |
-|-------|-------------|----------------|
-| `ha` | 0.5412 | 0.5882 |
-| `la` | 0.5672 | 0.6000 |
+| Model | Accuracy Lama | Accuracy Baru | Peningkatan |
+|-------|--------------|---------------|-------------|
+| SimpleCNN | 87.50% | 96.11% | **+8.61%** |
+| ImprovedCNN | 87.50% | 98.11% | **+10.61%** |
+
+**Kelas F1 sempurna (ImprovedCNN):** `na`, `ta`, `wa`, `pa`, `ja`, `nya` (6/20 kelas = 1.0000)
+
+**Kelas F1 terendah (tetap > 0.92):** `ga` (0.9296), `tha` (0.9535), `la` (0.9577)
 
 ---
 
@@ -461,7 +543,7 @@ gradcam.remove_hooks()
 
 ## Konfigurasi Hyperparameter
 
-Semua hyperparameter terpusat di `src/config.py` menggunakan Python dataclass:
+Semua hyperparameter terpusat di `src/config.py` menggunakan Python dataclass. Jika file `artifacts/best_params_{model}.json` tersedia (dari Optuna), parameter otomatis di-override saat training.
 
 ```python
 import sys
@@ -474,28 +556,28 @@ cfg.learning_rate = 1e-3
 
 ### Daftar Parameter Lengkap
 
-| Parameter | Default | Keterangan |
-|-----------|---------|------------|
-| `image_size` | 96 | Ukuran input (px) |
-| `in_channels` | 1 | Grayscale |
-| `batch_size` | 64 | |
-| `epochs` | 50 | |
-| `learning_rate` | 1.2e-3 | |
-| `weight_decay` | 1e-4 | L2 regularisasi dalam AdamW |
-| `warmup_epochs` | 2 | Linear warmup sebelum cosine annealing |
-| `label_smoothing` | 0.05 | Mencegah overconfidence |
-| `grad_clip_norm` | 1.0 | Max norm gradient clipping |
-| `dropout` | 0.4 | Regularisasi classifier head |
-| `early_stopping_patience` | 12 | Epoch tanpa peningkatan val_acc |
-| `norm_mean` | (0.10,) | Mean setelah invert |
-| `norm_std` | (0.25,) | Std normalisasi |
-| `aug_rotation_deg` | 8.0 | Rotasi maksimum (derajat) |
-| `aug_translate` | 0.08 | Translasi maksimum (fraksi ukuran gambar) |
-| `aug_scale` | (0.90, 1.10) | Scale range augmentasi |
-| `aug_shear_deg` | 5.0 | Shear maksimum (derajat) |
-| `aug_erasing_prob` | 0.15 | Probabilitas RandomErasing |
-| `seed` | 42 | Reproducibility |
-| `num_workers` | 0 | 0 untuk Windows; 4-8 untuk Linux |
+| Parameter | Default | Optuna Override | Keterangan |
+|-----------|---------|-----------------|------------|
+| `image_size` | 96 | - | Ukuran input (px) |
+| `in_channels` | 1 | - | Grayscale |
+| `batch_size` | 64 | 32 | Dari Optuna |
+| `epochs` | 100 | - | Max epochs |
+| `learning_rate` | 1.2e-3 | ~4e-3 | Dari Optuna |
+| `weight_decay` | 1e-4 | ~2-5e-4 | Dari Optuna |
+| `warmup_epochs` | 2 | 3 | Dari Optuna |
+| `label_smoothing` | 0.05 | ~0.13 | Dari Optuna |
+| `grad_clip_norm` | 1.0 | - | Max norm gradient clipping |
+| `dropout` | 0.4 | ~0.26-0.30 | Dari Optuna |
+| `early_stopping_patience` | 20 | - | Epoch tanpa peningkatan val_acc |
+| `norm_mean` | (0.10,) | - | Mean setelah invert |
+| `norm_std` | (0.25,) | - | Std normalisasi |
+| `aug_rotation_deg` | 8.0 | ~7.6-7.8 | Dari Optuna |
+| `aug_translate` | 0.08 | - | Translasi maksimum |
+| `aug_scale` | (0.90, 1.10) | - | Scale range augmentasi |
+| `aug_shear_deg` | 5.0 | - | Shear maksimum |
+| `aug_erasing_prob` | 0.15 | ~0.07-0.17 | Dari Optuna |
+| `seed` | 42 | - | Reproducibility |
+| `num_workers` | 0 | - | 0 untuk Windows |
 
 ---
 
@@ -506,3 +588,4 @@ cfg.learning_rate = 1e-3
 - **Dataset lazy loading**: gambar dibuka satu per satu saat diakses (`__getitem__`), aman untuk dataset besar.
 - **Deduplication berbasis MD5**: hash MD5 menghapus gambar duplikat antar sumber, mencegah data leakage.
 - **`ReLU(inplace=False)` wajib untuk Grad-CAM**: `inplace=True` memodifikasi tensor in-place sehingga backward hooks tidak bisa mengambil nilai aktivasi yang benar.
+- **Auto-load Optuna params**: `main.py` otomatis membaca `artifacts/best_params_{model}.json` sebelum training. Jika file tidak ada, training tetap berjalan dengan config default.

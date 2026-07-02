@@ -1,0 +1,17 @@
+{
+  "model": "improved",
+  "display_name": "ImprovedCNN",
+  "best_val_acc": 0.9066985645933014,
+  "best_params": {
+    "learning_rate": 0.0038862516566823403,
+    "weight_decay": 0.0005035312561480005,
+    "dropout": 0.2643195810557758,
+    "batch_size": 32,
+    "label_smoothing": 0.13322766064926653,
+    "aug_rotation_deg": 7.815531632433655,
+    "aug_erasing_prob": 0.16863784468049559,
+    "warmup_epochs": 3
+  },
+  "n_trials": 30,
+  "tune_epochs": 20
+}

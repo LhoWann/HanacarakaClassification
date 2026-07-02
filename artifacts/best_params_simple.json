@@ -1,0 +1,17 @@
+{
+  "model": "simple",
+  "display_name": "SimpleCNN",
+  "best_val_acc": 0.8947368421052632,
+  "best_params": {
+    "learning_rate": 0.004667345096062036,
+    "weight_decay": 0.0002146121432385045,
+    "dropout": 0.3021151432852226,
+    "batch_size": 32,
+    "label_smoothing": 0.1257571442959718,
+    "aug_rotation_deg": 7.6005852122297926,
+    "aug_erasing_prob": 0.06451451939387219,
+    "warmup_epochs": 3
+  },
+  "n_trials": 30,
+  "tune_epochs": 20
+}

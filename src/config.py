@@ -31,7 +31,7 @@ class Config:
     norm_std:  tuple = (0.25,)
 
     batch_size:      int   = 64
-    epochs:          int   = 50
+    epochs:          int   = 100
     learning_rate:   float = 1.2e-3
     weight_decay:    float = 1e-4
     warmup_epochs:   int   = 2
@@ -47,7 +47,7 @@ class Config:
     aug_erasing_prob: float = 0.15
 
     dropout:                 float = 0.4
-    early_stopping_patience: int   = 12
+    early_stopping_patience: int   = 20
 
     seed: int = 42
 
